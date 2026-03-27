@@ -1,5 +1,9 @@
 import React, { useState, useRef } from 'react';
 import { Volume2, Lock, CheckCircle } from 'lucide-react';
+import { useLearningRecords } from '../hooks/useLearningRecords';
+
+// 模拟当前用户 ID（实际应用中应该从登录系统获取）
+const CURRENT_USER_ID = '550e8400-e29b-41d4-a716-446655440000';
 
 const Learning = () => {
   // 声母数据
@@ -59,60 +63,63 @@ const Learning = () => {
   const [consonants] = useState(initialConsonants);
   const [vowels] = useState(initialVowels);
   const [selectedItem, setSelectedItem] = useState(null);
-  const audioContextRef = useRef(null);
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
 
-  // 初始化音频上下文
-  const initAudioContext = () => {
-    if (!audioContextRef.current) {
-      audioContextRef.current = new (window.AudioContext || window.webkitAudioContext)();
-    }
-    return audioContextRef.current;
-  };
+  // 使用 Supabase Hook
+  const { records, updateRecord, loading, error } = useLearningRecords(CURRENT_USER_ID);
 
-  // 播放发音函数
-  const playSound = async (char) => {
-    try {
-      // 初始化音频上下文
-      const audioContext = initAudioContext();
+  // 播放发音函数 - 使用 SpeechSynthesis API
+  const playSound = (char) => {
+    // 检查浏览器是否支持 SpeechSynthesis API
+    if ('speechSynthesis' in window) {
+      // 取消之前的发音
+      window.speechSynthesis.cancel();
       
-      // 如果是暂停状态，恢复播放
-      if (audioContext.state === 'suspended') {
-        await audioContext.resume();
-      }
+      // 创建发音实例
+      const utterance = new SpeechSynthesisUtterance(char);
       
-      // 创建 oscillator（振荡器）来生成声音
-      const oscillator = audioContext.createOscillator();
-      const gainNode = audioContext.createGain();
+      // 设置语言为中文
+      utterance.lang = 'zh-CN';
       
-      // 连接节点
-      oscillator.connect(gainNode);
-      gainNode.connect(audioContext.destination);
+      // 设置语速（稍慢，适合儿童学习）
+      utterance.rate = 0.8;
       
-      // 设置音调和音量
-      oscillator.type = 'sine';
-      oscillator.frequency.value = 440; // 默认频率
-      gainNode.gain.value = 0.1; // 音量
+      // 设置音调
+      utterance.pitch = 1.0;
       
-      // 根据不同拼音设置不同频率（简化模拟）
-      const frequencyMap = {
-        'a': 440, 'o': 494, 'e': 523, 'i': 587, 'u': 659, 'ü': 698,
-        'b': 220, 'p': 233, 'm': 247, 'f': 262, 'd': 294, 't': 330,
-        'n': 349, 'l': 392, 'g': 415, 'k': 466, 'h': 494
+      // 设置音量
+      utterance.volume = 1.0;
+      
+      // 开始发音
+      setIsPlaying(true);
+      utterance.onend = () => {
+        setIsPlaying(false);
       };
       
-      if (frequencyMap[char]) {
-        oscillator.frequency.value = frequencyMap[char];
-      }
+      utterance.onerror = (event) => {
+        console.error('发音出错:', event);
+        setIsPlaying(false);
+      };
       
-      // 播放声音
-      oscillator.start();
-      
-      // 0.5秒后停止
-      setTimeout(() => {
-        oscillator.stop();
-      }, 500);
-    } catch (error) {
-      console.error('播放音频时出错:', error);
+      window.speechSynthesis.speak(utterance);
+    } else {
+      alert('您的浏览器不支持发音功能，请使用现代浏览器（如 Chrome、Edge、Safari 等）');
+    }
+  };
+
+  // 更新学习进度
+  const handleComplete = async (item, type) => {
+    if (isSaving || loading) return;
+    
+    setIsSaving(true);
+    try {
+      await updateRecord(type, item.char, 'completed');
+    } catch (err) {
+      console.error('保存学习进度失败:', err);
+      alert('保存学习进度失败，请重试');
+    } finally {
+      setIsSaving(false);
     }
   };
 
@@ -164,40 +171,79 @@ const Learning = () => {
         </div>
       </div>
 
+      {/* 加载和错误提示 */}
+      {loading && (
+        <div className="text-center text-[#666666] mb-4">
+          正在加载学习进度...
+        </div>
+      )}
+      
+      {error && (
+        <div className="text-center text-[#FF6B6B] mb-4">
+          {error}
+          <button 
+            className="ml-2 text-[#4ECDC4] underline"
+            onClick={() => window.location.reload()}
+          >
+            重试
+          </button>
+        </div>
+      )}
+
       {/* 内容区域 */}
       <div className="bg-white rounded-2xl shadow-lg p-6">
         {activeTab === 'consonants' ? (
           <div>
-            <h2 className="text-2xl font-bold text-[#333333] mb-6">声母 (21个)</h2>
+            <h2 className="text-2xl font-bold text-[#333333] mb-6">声母 (21 个)</h2>
             <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-7 gap-4">
-              {consonants.map((item) => (
-                <div 
-                  key={item.id}
-                  className={`${getStatusClass(item.status)} border-2 rounded-2xl p-4 flex flex-col items-center justify-center cursor-pointer transition-all hover:scale-105`}
-                  onClick={() => setSelectedItem(item)}
-                >
-                  <div className="text-3xl font-bold mb-2">{item.char}</div>
-                  <div className="text-sm mb-2">{item.pronunciation}</div>
-                  {getStatusIcon(item.status)}
-                </div>
-              ))}
+              {consonants.map((item) => {
+                const record = records.find(r => r.pinyin_char === item.char && r.pinyin_type === 'consonant');
+                const status = record ? record.status : item.status;
+                
+                return (
+                  <div 
+                    key={item.id}
+                    className={`${getStatusClass(status)} border-2 rounded-2xl p-4 flex flex-col items-center justify-center cursor-pointer transition-all hover:scale-105`}
+                    onClick={() => {
+                      setSelectedItem({...item, status});
+                      if (status === 'completed') {
+                        playSound(item.char);
+                      }
+                    }}
+                  >
+                    <div className="text-3xl font-bold mb-2">{item.char}</div>
+                    <div className="text-sm mb-2">{item.pronunciation}</div>
+                    {getStatusIcon(status)}
+                  </div>
+                );
+              })}
             </div>
           </div>
         ) : (
           <div>
-            <h2 className="text-2xl font-bold text-[#333333] mb-6">韵母 (24个)</h2>
+            <h2 className="text-2xl font-bold text-[#333333] mb-6">韵母 (24 个)</h2>
             <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8 gap-4">
-              {vowels.map((item) => (
-                <div 
-                  key={item.id}
-                  className={`${getStatusClass(item.status)} border-2 rounded-2xl p-4 flex flex-col items-center justify-center cursor-pointer transition-all hover:scale-105`}
-                  onClick={() => setSelectedItem(item)}
-                >
-                  <div className="text-3xl font-bold mb-2">{item.char}</div>
-                  <div className="text-sm mb-2">{item.pronunciation}</div>
-                  {getStatusIcon(item.status)}
-                </div>
-              ))}
+              {vowels.map((item) => {
+                const record = records.find(r => r.pinyin_char === item.char && r.pinyin_type === 'vowel');
+                const status = record ? record.status : item.status;
+                
+                return (
+                  <div 
+                    key={item.id}
+                    className={`${getStatusClass(status)} border-2 rounded-2xl p-4 flex flex-col items-center justify-center cursor-pointer transition-all hover:scale-105`}
+                    onClick={() => {
+                      setSelectedItem({...item, status});
+                      if (status === 'completed') {
+                        playSound(item.char);
+                      }
+                    }}
+                  >
+                    <div className="text-3xl font-bold mb-2">{item.char}</div>
+                    <div className="text-sm mb-2">{item.pronunciation}</div>
+                    {getStatusIcon(status)}
+                  </div>
+                );
+              })}
             </div>
           </div>
         )}
@@ -222,12 +268,25 @@ const Learning = () => {
               <div className="text-2xl mb-6">{selectedItem.pronunciation}</div>
               
               <button 
-                className="flex items-center justify-center mx-auto bg-[#4ECDC4] text-white px-6 py-3 rounded-full hover:bg-[#3eb8af] transition-colors"
+                className={`flex items-center justify-center mx-auto ${
+                  isPlaying ? 'bg-[#3eb8af]' : 'bg-[#4ECDC4]'
+                } text-white px-6 py-3 rounded-full hover:bg-[#3eb8af] transition-colors`}
                 onClick={() => playSound(selectedItem.char)}
+                disabled={isPlaying}
               >
-                <Volume2 className="w-5 h-5 mr-2" />
-                播放发音
+                <Volume2 className={`w-5 h-5 mr-2 ${isPlaying ? 'animate-pulse' : ''}`} />
+                {isPlaying ? '正在播放...' : '播放发音'}
               </button>
+
+              {selectedItem.status !== 'completed' && (
+                <button
+                  className={`mt-4 flex items-center justify-center mx-auto bg-[#FF6B35] text-white px-6 py-3 rounded-full hover:bg-[#e55a2b] transition-colors disabled:opacity-50`}
+                  onClick={() => handleComplete(selectedItem, activeTab === 'consonants' ? 'consonant' : 'vowel')}
+                  disabled={isSaving || loading}
+                >
+                  {isSaving ? '保存中...' : '标记为已学会'}
+                </button>
+              )}
             </div>
             
             <div className="bg-gray-50 rounded-xl p-4">

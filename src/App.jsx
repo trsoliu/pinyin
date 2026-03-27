@@ -6,6 +6,8 @@ import Practice from './pages/Practice';
 import Test from './pages/Test';
 import Report from './pages/Report';
 import ParentDashboard from './pages/ParentDashboard';
+import Register from './pages/Register';
+import Login from './pages/Login';
 import Header from './components/Header';
 import Footer from './components/Footer';
 
@@ -22,6 +24,8 @@ const App = () => {
             <Route path="/test" element={<Test />} />
             <Route path="/report" element={<Report />} />
             <Route path="/parent" element={<ParentDashboard />} />
+            <Route path="/register" element={<Register />} />
+            <Route path="/login" element={<Login />} />
           </Routes>
         </main>
         <Footer />
