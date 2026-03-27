@@ -1,35 +1,38 @@
 import React, { useState } from 'react';
 import { User, Clock, BarChart3, Award, Settings, Shield, Timer } from 'lucide-react';
+import { useTestScores } from '../hooks/useTestScores';
+import { useLearningRecords } from '../hooks/useLearningRecords';
+
+// 模拟当前用户 ID（实际应用中应该从登录系统获取）
+const CURRENT_CHILD_ID = '550e8400-e29b-41d4-a716-446655440000';
 
 const ParentDashboard = () => {
   const [activeTab, setActiveTab] = useState('overview');
-  const [timeLimit, setTimeLimit] = useState(60); // 默认60分钟
+  const [timeLimit, setTimeLimit] = useState(60);
 
-  // 模拟孩子学习数据
+  // 模拟孩子信息
   const childData = {
     name: "小明",
     age: 7,
-    avatar: "https://www.weavefox.cn/api/bolt/unsplash_image?keyword=儿童,头像&width=100&height=100&random=child_avatar_100_100"
+    avatar: "https://www.weavefox.cn/api/bolt/unsplash_image?keyword=儿童，头像&width=100&height=100&random=child_avatar_100_100"
   };
 
-  // 模拟学习统计数据
+  // 使用 Supabase Hooks
+  const { scores, loading: scoresLoading, error: scoresError, getAverageScore, getRecentTests } = useTestScores(CURRENT_CHILD_ID);
+  const { records, loading: recordsLoading, getProgress } = useLearningRecords(CURRENT_CHILD_ID);
+
+  // 计算统计数据
   const learningStats = {
-    todayTime: 45, // 今日学习时间(分钟)
-    weekTime: 210, // 本周学习时间(分钟)
-    totalLessons: 15,
-    completedLessons: 12,
-    averageScore: 87,
-    streak: 5 // 连续学习天数
+    todayTime: 45,
+    weekTime: 210,
+    totalLessons: 45,
+    completedLessons: getProgress().completed,
+    averageScore: getAverageScore(),
+    streak: 5
   };
 
-  // 模拟测试历史
-  const testHistory = [
-    { id: 1, date: "2025-02-08", score: 85, type: "声母测试" },
-    { id: 2, date: "2025-02-01", score: 90, type: "韵母测试" },
-    { id: 3, date: "2025-01-25", score: 78, type: "综合测试" }
-  ];
+  const testHistory = getRecentTests(3);
 
-  // 模拟成就数据
   const achievements = [
     { id: 1, name: "初学者", date: "2025-01-15" },
     { id: 2, name: "声母大师", date: "2025-01-20" },
@@ -37,13 +40,9 @@ const ParentDashboard = () => {
     { id: 6, name: "坚持不懈", date: "2025-01-30" }
   ];
 
-  const getProgressPercentage = () => {
-    return Math.round((learningStats.completedLessons / learningStats.totalLessons) * 100);
-  };
-
   const handleTimeLimitChange = () => {
-    // 保存时间限制设置
-    console.log(`设置学习时间限制为: ${timeLimit}分钟`);
+    console.log(`设置学习时间限制为：${timeLimit}分钟`);
+    alert(`学习时间限制已设置为${timeLimit}分钟`);
   };
 
   return (
@@ -111,17 +110,37 @@ const ParentDashboard = () => {
               学习统计
             </h2>
             
+            {/* 加载提示 */}
+            {(recordsLoading || scoresLoading) && (
+              <div className="text-center text-[#666666] mb-4">
+                正在加载数据...
+              </div>
+            )}
+            
+            {/* 错误提示 */}
+            {(scoresError) && (
+              <div className="text-center text-[#FF6B6B] mb-4">
+                加载数据失败，请刷新页面重试
+                <button 
+                  className="ml-2 text-[#4ECDC4] underline"
+                  onClick={() => window.location.reload()}
+                >
+                  刷新
+                </button>
+              </div>
+            )}
+            
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
               <div className="bg-[#FFF8F0] rounded-2xl p-6 text-center border-2 border-[#FF6B35]">
                 <Clock className="w-12 h-12 text-[#FF6B35] mx-auto mb-4" />
                 <div className="text-3xl font-bold text-[#333333]">{learningStats.todayTime}</div>
-                <div className="text-[#666666]">今日学习(分钟)</div>
+                <div className="text-[#666666]">今日学习 (分钟)</div>
               </div>
               
               <div className="bg-[#FFF8F0] rounded-2xl p-6 text-center border-2 border-[#4ECDC4]">
                 <BarChart3 className="w-12 h-12 text-[#4ECDC4] mx-auto mb-4" />
                 <div className="text-3xl font-bold text-[#333333]">{learningStats.weekTime}</div>
-                <div className="text-[#666666]">本周学习(分钟)</div>
+                <div className="text-[#666666]">本周学习 (分钟)</div>
               </div>
               
               <div className="bg-[#FFF8F0] rounded-2xl p-6 text-center border-2 border-[#FFD93D]">
@@ -141,14 +160,14 @@ const ParentDashboard = () => {
             <div className="mb-8">
               <div className="flex justify-between mb-2">
                 <span className="font-medium">课程完成进度</span>
-                <span>{getProgressPercentage()}%</span>
+                <span>{getProgress().percentage}%</span>
               </div>
               <div className="w-full bg-gray-200 rounded-full h-6">
                 <div 
                   className="bg-[#FF6B35] h-6 rounded-full flex items-center justify-center text-white font-bold text-sm"
-                  style={{width: `${getProgressPercentage()}%`}}
+                  style={{width: `${getProgress().percentage}%`}}
                 >
-                  {learningStats.completedLessons}/{learningStats.totalLessons}
+                  {getProgress().completed}/{getProgress().total}
                 </div>
               </div>
             </div>

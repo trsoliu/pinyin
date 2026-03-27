@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState } from 'react';
 import { Volume2, CheckCircle, XCircle, RotateCcw } from 'lucide-react';
 
 const Practice = () => {
@@ -7,59 +7,44 @@ const Practice = () => {
   const [selectedAnswer, setSelectedAnswer] = useState(null);
   const [showResult, setShowResult] = useState(false);
   const [score, setScore] = useState(0);
-  const audioContextRef = useRef(null);
+  const [isPlaying, setIsPlaying] = useState(false);
 
-  // 初始化音频上下文
-  const initAudioContext = () => {
-    if (!audioContextRef.current) {
-      audioContextRef.current = new (window.AudioContext || window.webkitAudioContext)();
-    }
-    return audioContextRef.current;
-  };
-
-  // 播放发音函数
-  const playSound = async (text) => {
-    try {
-      // 初始化音频上下文
-      const audioContext = initAudioContext();
+  // 播放发音函数 - 使用 SpeechSynthesis API
+  const playSound = (text) => {
+    // 检查浏览器是否支持 SpeechSynthesis API
+    if ('speechSynthesis' in window) {
+      // 取消之前的发音
+      window.speechSynthesis.cancel();
       
-      // 如果是暂停状态，恢复播放
-      if (audioContext.state === 'suspended') {
-        await audioContext.resume();
-      }
+      // 创建发音实例
+      const utterance = new SpeechSynthesisUtterance(text);
       
-      // 创建 oscillator（振荡器）来生成声音
-      const oscillator = audioContext.createOscillator();
-      const gainNode = audioContext.createGain();
+      // 设置语言为中文
+      utterance.lang = 'zh-CN';
       
-      // 连接节点
-      oscillator.connect(gainNode);
-      gainNode.connect(audioContext.destination);
+      // 设置语速（稍慢，适合儿童学习）
+      utterance.rate = 0.8;
       
-      // 设置音调和音量
-      oscillator.type = 'sine';
-      oscillator.frequency.value = 440; // 默认频率
-      gainNode.gain.value = 0.1; // 音量
+      // 设置音调
+      utterance.pitch = 1.0;
       
-      // 根据不同拼音设置不同频率（简化模拟）
-      const frequencyMap = {
-        'mā': 440, 'bàba': 220, 'mǐ': 330,
-        '花': 523, '书': 392
+      // 设置音量
+      utterance.volume = 1.0;
+      
+      // 开始发音
+      setIsPlaying(true);
+      utterance.onend = () => {
+        setIsPlaying(false);
       };
       
-      if (frequencyMap[text]) {
-        oscillator.frequency.value = frequencyMap[text];
-      }
+      utterance.onerror = (event) => {
+        console.error('发音出错:', event);
+        setIsPlaying(false);
+      };
       
-      // 播放声音
-      oscillator.start();
-      
-      // 0.5秒后停止
-      setTimeout(() => {
-        oscillator.stop();
-      }, 500);
-    } catch (error) {
-      console.error('播放音频时出错:', error);
+      window.speechSynthesis.speak(utterance);
+    } else {
+      alert('您的浏览器不支持发音功能，请使用现代浏览器（如 Chrome、Edge、Safari 等）');
     }
   };
 
@@ -70,21 +55,21 @@ const Practice = () => {
       pinyin: "mā",
       options: ["妈", "吗", "麻", "骂"],
       correct: 0,
-      image: "https://www.weavefox.cn/api/bolt/unsplash_image?keyword=妈妈,人物&width=200&height=200&random=mama_200_200"
+      image: "https://www.weavefox.cn/api/bolt/unsplash_image?keyword=妈妈，人物&width=200&height=200&random=mama_200_200"
     },
     {
       id: 2,
       pinyin: "bàba",
       options: ["爸爸", "把把", "坝坝", "粑粑"],
       correct: 0,
-      image: "https://www.weavefox.cn/api/bolt/unsplash_image?keyword=爸爸,人物&width=200&height=200&random=baba_200_200"
+      image: "https://www.weavefox.cn/api/bolt/unsplash_image?keyword=爸爸，人物&width=200&height=200&random=baba_200_200"
     },
     {
       id: 3,
       pinyin: "mǐ",
       options: ["米", "密", "迷", "蜜"],
       correct: 0,
-      image: "https://www.weavefox.cn/api/bolt/unsplash_image?keyword=大米,食物&width=200&height=200&random=mi_200_200"
+      image: "https://www.weavefox.cn/api/bolt/unsplash_image?keyword=大米，食物&width=200&height=200&random=mi_200_200"
     }
   ];
 
@@ -96,7 +81,7 @@ const Practice = () => {
       pinyin: "huā",
       options: ["huā", "huá", "huǎ", "huà"],
       correct: 0,
-      image: "https://www.weavefox.cn/api/bolt/unsplash_image?keyword=花朵,植物&width=200&height=200&random=hua_200_200"
+      image: "https://www.weavefox.cn/api/bolt/unsplash_image?keyword=花朵，植物&width=200&height=200&random=hua_200_200"
     },
     {
       id: 2,
@@ -104,7 +89,7 @@ const Practice = () => {
       pinyin: "shū",
       options: ["sū", "shū", "shú", "shǔ"],
       correct: 1,
-      image: "https://www.weavefox.cn/api/bolt/unsplash_image?keyword=书籍,学习&width=200&height=200&random=shu_200_200"
+      image: "https://www.weavefox.cn/api/bolt/unsplash_image?keyword=书籍，学习&width=200&height=200&random=shu_200_200"
     }
   ];
 
@@ -182,7 +167,7 @@ const Practice = () => {
                 第 {currentQuestion + 1} 题 / 共 {questions.length} 题
               </span>
               <span className="bg-[#FFD93D] text-[#333333] px-3 py-1 rounded-full font-bold">
-                得分: {score}
+                得分：{score}
               </span>
             </div>
 
@@ -192,11 +177,14 @@ const Practice = () => {
                 <div className="mb-8">
                   <div className="text-5xl font-bold mb-4 text-[#FF6B35]">{question.pinyin}</div>
                   <button 
-                    className="flex items-center justify-center mx-auto bg-[#4ECDC4] text-white px-4 py-2 rounded-full hover:bg-[#3eb8af] transition-colors"
+                    className={`flex items-center justify-center mx-auto ${
+                      isPlaying ? 'bg-[#3eb8af]' : 'bg-[#4ECDC4]'
+                    } text-white px-4 py-2 rounded-full hover:bg-[#3eb8af] transition-colors`}
                     onClick={() => playSound(question.pinyin)}
+                    disabled={isPlaying}
                   >
-                    <Volume2 className="w-5 h-5 mr-2" />
-                    播放发音
+                    <Volume2 className={`w-5 h-5 mr-2 ${isPlaying ? 'animate-pulse' : ''}`} />
+                    {isPlaying ? '正在播放...' : '播放发音'}
                   </button>
                 </div>
                 
@@ -221,11 +209,14 @@ const Practice = () => {
                   />
                   <div className="text-5xl font-bold mb-4 text-[#4ECDC4]">{question.word}</div>
                   <button 
-                    className="flex items-center justify-center mx-auto bg-[#FF6B35] text-white px-4 py-2 rounded-full hover:bg-[#e55a2b] transition-colors"
+                    className={`flex items-center justify-center mx-auto ${
+                      isPlaying ? 'bg-[#e55a2b]' : 'bg-[#FF6B35]'
+                    } text-white px-4 py-2 rounded-full hover:bg-[#e55a2b] transition-colors`}
                     onClick={() => playSound(question.word)}
+                    disabled={isPlaying}
                   >
-                    <Volume2 className="w-5 h-5 mr-2" />
-                    播放词语
+                    <Volume2 className={`w-5 h-5 mr-2 ${isPlaying ? 'animate-pulse' : ''}`} />
+                    {isPlaying ? '正在播放...' : '播放词语'}
                   </button>
                 </div>
                 
@@ -276,7 +267,7 @@ const Practice = () => {
                   {selectedAnswer === question.correct ? '答对了！真棒！' : '答错了，再试试看！'}
                 </div>
                 <div className="mt-2">
-                  正确答案是: {question.options[question.correct]}
+                  正确答案是：{question.options[question.correct]}
                 </div>
               </div>
             )}
