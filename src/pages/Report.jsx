@@ -1,45 +1,165 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Award, Trophy, Target, Clock, RotateCcw, BarChart3 } from 'lucide-react';
+import { useCurrentUser } from '../hooks/useCurrentUser';
+import { useLearningRecords } from '../hooks/useLearningRecords';
+import { useTestScores } from '../hooks/useTestScores';
 
 const Report = () => {
+  const { currentUser } = useCurrentUser();
+  const { records, loading: recordsLoading } = useLearningRecords(currentUser?.id);
+  const { scores, loading: scoresLoading, getAverageScore, getRecentTests } = useTestScores(currentUser?.id);
+  
   const [activeTab, setActiveTab] = useState('overview');
+  const [learningData, setLearningData] = useState({
+    totalLessons: 45, // 21 声母 + 24 韵母
+    completedLessons: 0,
+    totalTests: 0,
+    averageScore: 0,
+    totalTime: 0, // 分钟
+    streak: 0 // 连续学习天数
+  });
 
-  // 模拟学习数据
-  const learningData = {
-    totalLessons: 25,
-    completedLessons: 15,
-    totalTests: 3,
-    averageScore: 85,
-    totalTime: 120, // 分钟
-    streak: 7 // 连续学习天数
-  };
+  // 计算学习数据
+  useEffect(() => {
+    if (records.length > 0 || scores.length > 0) {
+      const completedLessons = records.filter(r => r.status === 'completed').length;
+      const averageScore = getAverageScore();
+      const totalTests = scores.length;
+      
+      setLearningData(prev => ({
+        ...prev,
+        completedLessons,
+        averageScore,
+        totalTests
+      }));
+    }
+  }, [records, scores, getAverageScore]);
 
   // 模拟成就数据
   const achievements = [
-    { id: 1, name: "初学者", description: "完成第一课学习", unlocked: true, date: "2025-01-15" },
-    { id: 2, name: "声母大师", description: "完成所有声母学习", unlocked: true, date: "2025-01-20" },
-    { id: 3, name: "韵母专家", description: "完成所有韵母学习", unlocked: false },
-    { id: 4, name: "测试达人", description: "完成第一次测试", unlocked: true, date: "2025-01-25" },
-    { id: 5, name: "满分冠军", description: "测试获得满分", unlocked: false },
-    { id: 6, name: "坚持不懈", description: "连续学习7天", unlocked: true, date: "2025-01-30" }
+    { id: 1, name: "初学者", description: "完成第一课学习", unlocked: false, date: null },
+    { id: 2, name: "声母大师", description: "完成所有声母学习", unlocked: false, date: null },
+    { id: 3, name: "韵母专家", description: "完成所有韵母学习", unlocked: false, date: null },
+    { id: 4, name: "测试达人", description: "完成第一次测试", unlocked: false, date: null },
+    { id: 5, name: "满分冠军", description: "测试获得满分", unlocked: false, date: null },
+    { id: 6, name: "坚持不懈", description: "连续学习7天", unlocked: false, date: null }
   ];
 
-  // 模拟测试历史
-  const testHistory = [
-    { id: 1, date: "2025-01-25", score: 85, total: 10, time: 3, type: "阶段测试一" },
-    { id: 2, date: "2025-02-01", score: 90, total: 10, time: 4, type: "阶段测试二" },
-    { id: 3, date: "2025-02-08", score: 75, total: 10, time: 5, type: "阶段测试三" }
-  ];
-
-  // 模拟错题
-  const wrongQuestions = [
-    { id: 1, question: "shū 的声调是第几声？", correct: "第一声", selected: "第四声", date: "2025-02-08" },
-    { id: 2, question: "哪个是正确的拼音：kāfēi 还是 kǎfēi？", correct: "kāfēi", selected: "kǎfēi", date: "2025-02-01" }
-  ];
+  // 更新成就解锁状态
+  const updatedAchievements = achievements.map(achievement => {
+    // 根据实际学习数据更新成就状态
+    switch (achievement.id) {
+      case 1:
+        return {
+          ...achievement,
+          unlocked: learningData.completedLessons > 0,
+          date: learningData.completedLessons > 0 ? new Date().toISOString().split('T')[0] : null
+        };
+      case 2:
+        const consonantsCompleted = records.filter(r => 
+          r.pinyin_type === 'consonant' && r.status === 'completed'
+        ).length;
+        return {
+          ...achievement,
+          unlocked: consonantsCompleted >= 21,
+          date: consonantsCompleted >= 21 ? new Date().toISOString().split('T')[0] : null
+        };
+      case 3:
+        const vowelsCompleted = records.filter(r => 
+          r.pinyin_type === 'vowel' && r.status === 'completed'
+        ).length;
+        return {
+          ...achievement,
+          unlocked: vowelsCompleted >= 24,
+          date: vowelsCompleted >= 24 ? new Date().toISOString().split('T')[0] : null
+        };
+      case 4:
+        return {
+          ...achievement,
+          unlocked: learningData.totalTests > 0,
+          date: learningData.totalTests > 0 ? new Date().toISOString().split('T')[0] : null
+        };
+      case 5:
+        return {
+          ...achievement,
+          unlocked: learningData.averageScore === 100,
+          date: learningData.averageScore === 100 ? new Date().toISOString().split('T')[0] : null
+        };
+      default:
+        return achievement;
+    }
+  });
 
   const getProgressPercentage = () => {
     return Math.round((learningData.completedLessons / learningData.totalLessons) * 100);
   };
+
+  // 获取声母学习进度
+  const getConsonantProgress = () => {
+    const total = 21;
+    const completed = records.filter(r => 
+      r.pinyin_type === 'consonant' && r.status === 'completed'
+    ).length;
+    return {
+      completed,
+      total,
+      percentage: Math.round((completed / total) * 100)
+    };
+  };
+
+  // 获取韵母学习进度
+  const getVowelProgress = () => {
+    const total = 24;
+    const completed = records.filter(r => 
+      r.pinyin_type === 'vowel' && r.status === 'completed'
+    ).length;
+    return {
+      completed,
+      total,
+      percentage: Math.round((completed / total) * 100)
+    };
+  };
+
+  // 获取最近错题（模拟数据）
+  const getWrongQuestions = () => {
+    // 在实际应用中，这应该从数据库获取真实的错题记录
+    return [];
+  };
+
+  // 如果用户未登录，显示提示信息
+  if (!currentUser) {
+    return (
+      <div className="container mx-auto px-4 py-8">
+        <h1 className="text-3xl font-bold text-[#333333] mb-8 text-center">学习报告</h1>
+        <div className="bg-white rounded-2xl shadow-lg p-8 text-center">
+          <p className="text-xl text-[#666666] mb-6">请先登录以查看您的学习报告</p>
+          <button 
+            className="bg-[#FF6B35] text-white px-6 py-3 rounded-full font-medium hover:bg-[#e55a2b] transition-colors"
+            onClick={() => window.location.hash = '/login'}
+          >
+            去登录
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // 显示加载状态
+  if (recordsLoading || scoresLoading) {
+    return (
+      <div className="container mx-auto px-4 py-8">
+        <h1 className="text-3xl font-bold text-[#333333] mb-8 text-center">学习报告</h1>
+        <div className="bg-white rounded-2xl shadow-lg p-8 text-center">
+          <p className="text-xl text-[#666666]">正在加载学习数据...</p>
+        </div>
+      </div>
+    );
+  }
+
+  const consonantProgress = getConsonantProgress();
+  const vowelProgress = getVowelProgress();
+  const wrongQuestions = getWrongQuestions();
+  const recentTests = getRecentTests(5);
 
   return (
     <div className="container mx-auto px-4 py-8">
@@ -105,14 +225,14 @@ const Report = () => {
               
               <div className="bg-[#FFF8F0] rounded-2xl p-6 text-center border-2 border-[#FF6B35]">
                 <Clock className="w-12 h-12 text-[#FF6B35] mx-auto mb-4" />
-                <div className="text-3xl font-bold text-[#333333]">{learningData.totalTime}</div>
-                <div className="text-[#666666]">学习总时长(分钟)</div>
+                <div className="text-3xl font-bold text-[#333333]">{learningData.totalTests}</div>
+                <div className="text-[#666666]">测试次数</div>
               </div>
               
               <div className="bg-[#FFF8F0] rounded-2xl p-6 text-center border-2 border-[#95E1D3]">
                 <Award className="w-12 h-12 text-[#95E1D3] mx-auto mb-4" />
-                <div className="text-3xl font-bold text-[#333333]">{learningData.streak}</div>
-                <div className="text-[#666666]">连续学习天数</div>
+                <div className="text-3xl font-bold text-[#333333]">{updatedAchievements.filter(a => a.unlocked).length}</div>
+                <div className="text-[#666666]">已获得成就</div>
               </div>
             </div>
             
@@ -138,10 +258,13 @@ const Report = () => {
                 <h3 className="text-xl font-bold mb-4 text-[#333333]">声母学习进度</h3>
                 <div className="flex justify-between mb-2">
                   <span>已完成</span>
-                  <span>8/21</span>
+                  <span>{consonantProgress.completed}/{consonantProgress.total}</span>
                 </div>
                 <div className="w-full bg-gray-200 rounded-full h-4">
-                  <div className="bg-[#4ECDC4] h-4 rounded-full" style={{width: '38%'}}></div>
+                  <div 
+                    className="bg-[#4ECDC4] h-4 rounded-full" 
+                    style={{width: `${consonantProgress.percentage}%`}}
+                  ></div>
                 </div>
               </div>
               
@@ -149,39 +272,38 @@ const Report = () => {
                 <h3 className="text-xl font-bold mb-4 text-[#333333]">韵母学习进度</h3>
                 <div className="flex justify-between mb-2">
                   <span>已完成</span>
-                  <span>5/24</span>
+                  <span>{vowelProgress.completed}/{vowelProgress.total}</span>
                 </div>
                 <div className="w-full bg-gray-200 rounded-full h-4">
-                  <div className="bg-[#FFD93D] h-4 rounded-full" style={{width: '21%'}}></div>
+                  <div 
+                    className="bg-[#FFD93D] h-4 rounded-full" 
+                    style={{width: `${vowelProgress.percentage}%`}}
+                  ></div>
                 </div>
               </div>
             </div>
             
-            {/* 最近错题 */}
+            {/* 最近测试 */}
             <div>
-              <h3 className="text-xl font-bold mb-4 text-[#333333]">最近错题回顾</h3>
-              {wrongQuestions.length > 0 ? (
+              <h3 className="text-xl font-bold mb-4 text-[#333333]">最近测试</h3>
+              {recentTests.length > 0 ? (
                 <div className="space-y-4">
-                  {wrongQuestions.map((question) => (
-                    <div key={question.id} className="border-2 border-red-200 rounded-2xl p-4">
-                      <div className="font-medium mb-2">{question.question}</div>
-                      <div className="flex flex-wrap gap-2">
-                        <div className="bg-red-100 text-red-800 px-3 py-1 rounded-full text-sm">
-                          你的答案: {question.selected}
-                        </div>
-                        <div className="bg-green-100 text-green-800 px-3 py-1 rounded-full text-sm">
-                          正确答案: {question.correct}
-                        </div>
-                        <div className="bg-gray-100 text-gray-800 px-3 py-1 rounded-full text-sm">
-                          {question.date}
-                        </div>
+                  {recentTests.map((test) => (
+                    <div key={test.id} className="border-2 border-[#4ECDC4] rounded-2xl p-4">
+                      <div className="flex justify-between items-center">
+                        <div className="font-medium">测试 #{test.id}</div>
+                        <div className="text-sm text-[#666666]">{new Date(test.created_at).toLocaleDateString()}</div>
+                      </div>
+                      <div className="flex justify-between mt-2">
+                        <div className="text-lg font-bold text-[#FF6B35]">{test.score}/{test.total_questions}</div>
+                        <div className="text-lg font-bold text-[#4ECDC4]">{test.correct_rate}%</div>
                       </div>
                     </div>
                   ))}
                 </div>
               ) : (
                 <div className="text-center py-8 text-[#666666]">
-                  暂无错题记录，继续保持！
+                  暂无测试记录，去完成一次测试吧！
                 </div>
               )}
             </div>
@@ -196,7 +318,7 @@ const Report = () => {
             </h2>
             
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-              {achievements.map((achievement) => (
+              {updatedAchievements.map((achievement) => (
                 <div 
                   key={achievement.id}
                   className={`rounded-2xl p-6 flex flex-col items-center text-center ${
@@ -244,31 +366,31 @@ const Report = () => {
               测试历史
             </h2>
             
-            {testHistory.length > 0 ? (
+            {scores.length > 0 ? (
               <div className="space-y-4">
-                {testHistory.map((test) => (
+                {scores.map((test) => (
                   <div key={test.id} className="border-2 border-[#4ECDC4] rounded-2xl p-6">
                     <div className="flex flex-wrap justify-between items-center mb-4">
-                      <h3 className="text-xl font-bold text-[#333333]">{test.type}</h3>
+                      <h3 className="text-xl font-bold text-[#333333]">测试 #{test.id}</h3>
                       <div className="bg-[#4ECDC4] text-white px-3 py-1 rounded-full">
-                        {test.date}
+                        {new Date(test.created_at).toLocaleDateString()}
                       </div>
                     </div>
                     
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                       <div className="bg-[#FFF8F0] rounded-xl p-4 text-center">
-                        <div className="text-2xl font-bold text-[#FF6B35]">{test.score}</div>
+                        <div className="text-2xl font-bold text-[#FF6B35]">{test.score}/{test.total_questions}</div>
                         <div className="text-[#666666]">得分</div>
                       </div>
                       
                       <div className="bg-[#FFF8F0] rounded-xl p-4 text-center">
-                        <div className="text-2xl font-bold text-[#4ECDC4]">{test.time}分钟</div>
-                        <div className="text-[#666666]">用时</div>
+                        <div className="text-2xl font-bold text-[#4ECDC4]">{test.correct_rate}%</div>
+                        <div className="text-[#666666]">正确率</div>
                       </div>
                       
                       <div className="bg-[#FFF8F0] rounded-xl p-4 text-center">
-                        <div className="text-2xl font-bold text-[#FFD93D]">{test.score * 10}%</div>
-                        <div className="text-[#666666]">正确率</div>
+                        <div className="text-2xl font-bold text-[#FFD93D]">{test.time_spent}秒</div>
+                        <div className="text-[#666666]">用时</div>
                       </div>
                     </div>
                   </div>

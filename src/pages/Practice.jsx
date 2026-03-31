@@ -1,13 +1,17 @@
 import React, { useState } from 'react';
 import { Volume2, CheckCircle, XCircle, RotateCcw } from 'lucide-react';
+import { useCurrentUser } from '../hooks/useCurrentUser';
+import { supabase } from '../lib/supabase';
 
 const Practice = () => {
+  const { currentUser } = useCurrentUser();
   const [activeTab, setActiveTab] = useState('pinyin');
   const [currentQuestion, setCurrentQuestion] = useState(0);
   const [selectedAnswer, setSelectedAnswer] = useState(null);
   const [showResult, setShowResult] = useState(false);
   const [score, setScore] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
 
   // 播放发音函数 - 使用 SpeechSynthesis API
   const playSound = (text) => {
@@ -96,13 +100,39 @@ const Practice = () => {
   const questions = activeTab === 'pinyin' ? pinyinQuestions : listeningQuestions;
   const question = questions[currentQuestion];
 
-  const handleAnswerSelect = (index) => {
+  const handleAnswerSelect = async (index) => {
     setSelectedAnswer(index);
     setShowResult(true);
     
     // 检查答案是否正确
-    if (index === question.correct) {
+    const isCorrect = index === question.correct;
+    if (isCorrect) {
       setScore(score + 1);
+    }
+    
+    // 保存练习记录到数据库
+    if (currentUser) {
+      try {
+        setIsSaving(true);
+        const { error } = await supabase
+          .from('learning_records_69564')
+          .insert({
+            user_id: currentUser.id,
+            pinyin_type: activeTab,
+            pinyin_char: activeTab === 'pinyin' ? question.pinyin : question.word,
+            status: isCorrect ? 'completed' : 'in_progress',
+            practice_count: 1,
+            learned_at: isCorrect ? new Date().toISOString() : null
+          });
+        
+        if (error) {
+          console.error('保存练习记录失败:', error);
+        }
+      } catch (err) {
+        console.error('保存练习记录出错:', err);
+      } finally {
+        setIsSaving(false);
+      }
     }
     
     // 延迟进入下一题
@@ -121,6 +151,24 @@ const Practice = () => {
     setShowResult(false);
     setScore(0);
   };
+
+  // 如果用户未登录，显示提示信息
+  if (!currentUser) {
+    return (
+      <div className="container mx-auto px-4 py-8">
+        <h1 className="text-3xl font-bold text-[#333333] mb-8 text-center">拼音练习</h1>
+        <div className="bg-white rounded-2xl shadow-lg p-8 text-center">
+          <p className="text-xl text-[#666666] mb-6">请先登录以保存您的练习记录</p>
+          <button 
+            className="bg-[#FF6B35] text-white px-6 py-3 rounded-full font-medium hover:bg-[#e55a2b] transition-colors"
+            onClick={() => window.location.hash = '/login'}
+          >
+            去登录
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="container mx-auto px-4 py-8">
@@ -241,7 +289,7 @@ const Practice = () => {
                     selectedAnswer !== null && index === question.correct ? 'animate-bounce' : ''
                   }`}
                   onClick={() => selectedAnswer === null && handleAnswerSelect(index)}
-                  disabled={selectedAnswer !== null}
+                  disabled={selectedAnswer !== null || isSaving}
                 >
                   <div className="flex items-center justify-center">
                     {option}
