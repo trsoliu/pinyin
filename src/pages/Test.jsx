@@ -1,7 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { Volume2, CheckCircle, XCircle, RotateCcw, Timer } from 'lucide-react';
+import { useCurrentUser } from '../hooks/useCurrentUser';
+import { useTestScores } from '../hooks/useTestScores';
 
 const Test = () => {
+  const { currentUser } = useCurrentUser();
+  const { addScore } = useTestScores();
+  
   const [testStarted, setTestStarted] = useState(false);
   const [timeLeft, setTimeLeft] = useState(300); // 5分钟
   const [currentQuestion, setCurrentQuestion] = useState(0);
@@ -10,6 +15,7 @@ const Test = () => {
   const [score, setScore] = useState(0);
   const [answers, setAnswers] = useState([]);
   const [testCompleted, setTestCompleted] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
 
   // 测试题目数据
   const questions = [
@@ -108,8 +114,29 @@ const Test = () => {
     }, 1500);
   };
 
-  const finishTest = () => {
+  const finishTest = async () => {
     setTestCompleted(true);
+    
+    // 保存测试成绩到数据库
+    if (currentUser) {
+      try {
+        setIsSaving(true);
+        const testData = {
+          user_id: currentUser.id,
+          score: score,
+          total_questions: questions.length,
+          correct_rate: Math.round((score / questions.length) * 100),
+          time_spent: 300 - timeLeft,
+          answers: answers
+        };
+        
+        await addScore(testData);
+      } catch (err) {
+        console.error('保存测试成绩失败:', err);
+      } finally {
+        setIsSaving(false);
+      }
+    }
   };
 
   const resetTest = () => {
@@ -133,6 +160,24 @@ const Test = () => {
     // 模拟播放发音
     console.log(`播放发音: ${text}`);
   };
+
+  // 如果用户未登录，显示提示信息
+  if (!currentUser) {
+    return (
+      <div className="container mx-auto px-4 py-8">
+        <h1 className="text-3xl font-bold text-[#333333] mb-8 text-center">拼音测试</h1>
+        <div className="bg-white rounded-2xl shadow-lg p-8 text-center">
+          <p className="text-xl text-[#666666] mb-6">请先登录以保存您的测试成绩</p>
+          <button 
+            className="bg-[#FF6B35] text-white px-6 py-3 rounded-full font-medium hover:bg-[#e55a2b] transition-colors"
+            onClick={() => window.location.hash = '/login'}
+          >
+            去登录
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="container mx-auto px-4 py-8">

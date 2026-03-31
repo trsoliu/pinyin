@@ -1,9 +1,7 @@
 import React, { useState, useRef } from 'react';
 import { Volume2, Lock, CheckCircle } from 'lucide-react';
 import { useLearningRecords } from '../hooks/useLearningRecords';
-
-// 模拟当前用户 ID（实际应用中应该从登录系统获取）
-const CURRENT_USER_ID = '550e8400-e29b-41d4-a716-446655440000';
+import { useCurrentUser } from '../hooks/useCurrentUser';
 
 const Learning = () => {
   // 声母数据
@@ -66,8 +64,11 @@ const Learning = () => {
   const [isPlaying, setIsPlaying] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
 
+  // 获取当前用户
+  const { currentUser } = useCurrentUser();
+  
   // 使用 Supabase Hook
-  const { records, updateRecord, loading, error } = useLearningRecords(CURRENT_USER_ID);
+  const { records, updateRecord, loading, error } = useLearningRecords(currentUser?.id);
 
   // 播放发音函数 - 使用 SpeechSynthesis API
   const playSound = (char) => {
@@ -111,6 +112,10 @@ const Learning = () => {
   // 更新学习进度
   const handleComplete = async (item, type) => {
     if (isSaving || loading) return;
+    if (!currentUser) {
+      alert('请先登录');
+      return;
+    }
     
     setIsSaving(true);
     try {
@@ -140,6 +145,24 @@ const Learning = () => {
     }
     return 'bg-white border-[#FFD93D]';
   };
+
+  // 如果用户未登录，显示提示信息
+  if (!currentUser) {
+    return (
+      <div className="container mx-auto px-4 py-8">
+        <h1 className="text-3xl font-bold text-[#333333] mb-8 text-center">拼音学习</h1>
+        <div className="bg-white rounded-2xl shadow-lg p-8 text-center">
+          <p className="text-xl text-[#666666] mb-6">请先登录以查看您的学习进度</p>
+          <button 
+            className="bg-[#FF6B35] text-white px-6 py-3 rounded-full font-medium hover:bg-[#e55a2b] transition-colors"
+            onClick={() => window.location.hash = '/login'}
+          >
+            去登录
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="container mx-auto px-4 py-8">
